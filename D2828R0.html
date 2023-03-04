@@ -34,6 +34,9 @@ pre.example::before {
 pre {
     margin-left: 1em;
 }
+dt {
+    font-weight: bold;
+}
 </style>
 </head>
 <body style="counter-reset: example">
@@ -41,12 +44,22 @@ pre {
 (<a href="https://wg21.link/CWG2327">Core issue 2327</a>)</h1>
 <table style="float: right">
 <tr><td>Document number:</td><td>D2828R0</td></tr>
-<tr><td>Date:</td><td>Feb 26, 2023</td></tr>
+<tr><td>Date:</td><td>March 3, 2023</td></tr>
 <tr><td>Audience:</td><td>CWG</td></tr>
 <tr><td>Reply to:</td><td>Brian Bi (bbi5291@gmail.com)</td></tr>
 <tr><td>With thanks to:</td><td>Richard Smith</td></tr>
 </table>
 <div style="clear: both"></div>
+<h2>Revision history</h2>
+<dl>
+<dt>March 3, 2023</dt>
+<dd>
+<ul>
+<li>Updated with opinions from March 3, 2023 CWG telecon</li>
+<li>Updated proposed resolution</li>
+</ul>
+</dd>
+</dl>
 <h2>Copy elision in the Big 3</h2>
 <p>Consider the example given in the issue report:</p>
 <pre class="example"><code>struct Cat {};
@@ -134,8 +147,15 @@ improved behavior in such cases: Clang by treating <code>operator X</code> as a
 candidate, and GCC by replacing <code>X::X(X&amp;&amp;)</code> by
 <code>operator X</code> when comparing it against <code>X::X(int)</code>.</p>
 
-<p>In the February 2023 WG21 meeting in Issaquah, CWG decided that code like the
-above ought to be well-formed.</p>
+<p>In the February 2023 WG21 meeting in Issaquah, the consensus in CWG was that
+code like the above ought to be well-formed,
+and that an approach similar to the Clang approach should be pursued in order
+to make it so. However, when the issue was discussed again at the March 3, 2023
+telecon, concerns were expressed about overly ambitious revisions to the
+overload resolution rules (see particularly Example 4 below). The consensus was
+that the benefits to making Example 2 work are outweighed by the costs of
+changing the currently mandated behavior of Example 4 to a different (but also
+well-formed) behavior.</p>
 
 <p>This divergence also arises in the context of standard library classes that
 have multiple one-argument constructors:</p>
@@ -153,9 +173,11 @@ std::string s(X{});
   // string(initializer_list&lt;char&gt;)?
   // string(nullptr_t)?</code></pre>
 <p>Here, virtually anyone but a language lawyer would expect the conversion
-operator to be called to convert to <code>std::string</code>. The fact that
-overload resolution is currently ambiguous in this case is a strong argument in
-favor of treating a Clang/GCC style resolution to issue 2327 as a DR.</p>
+operator to be called to convert to <code>std::string</code>.
+However, having an unconstrained conversion function template as in this
+example is not a particularly compelling use case. The consensus of CWG in the
+March 3, 2023 telecon was again that making this example work should not come at
+the cost of changing the behavior of Example 4.</p>
 
 <h3>Preference of conversion functions over constructors that would use a
 standard conversion</h3>
@@ -200,33 +222,28 @@ of tweaking overload resolution priority.</li>
 version 6.0.0, which was released in 2018, as long as the language mode is set
 to C++17 or higher. See commit <code>67ef14</code>.</li>
 </ul>
-<p>This is the one part of this issue that seems particularly messy to me. It's
+<p>It's
 possible for the Clang/GCC behavior to cause problems for users who expect
 direct-initialization to always call a constructor. They might try to implement
 the conversion function as follows:</p>
 <pre><code>Dog::operator Cat() {
     return Cat(*this);  // OK in current C++ and MSVC; infinite recursion in Clang and GCC
 }</code></pre>
-<p>Arguably, breaking this kind of code might be considered an evolutionary
-change to the language. On the other hand, resolving issue 2327 in a way that
-forces Clang and GCC to revert to the old behavior of calling the constructor
-here also has evolutionary implications, even though it's what the current
-standard already requires.</p>
-
-<p>The fact that Clang and GCC haven't already been forced to revert to the old
-behavior should be considered when deciding how to proceed; perhaps programmers
-very rarely give both <code>Cat</code> a constructor from <code>Dog</code> and
-<code>Dog</code> a conversion function to <code>Cat</code> (I certainly wouldn't
-let anything like that pass code review, personally). However, such a
-constructor might be instantiated from a constructor template rather than
-written deliberately. For this reason, Clang's tie-breaker rule of preferring a
+<p>Either the constructor or the conversion function might be instantiated from
+a template rather than written directly to convert to/from a single type;
+typically, the constructor.
+For this reason, Clang's tie-breaker rule of preferring a
 constructor over a conversion function had to be moved ahead of the template
-tie-breakers (otherwise, a non-template conversion function would call itself
-recursively); see commit <code>517313</code>. Even still, if the constructor
+tie-breakers (otherwise, a non-template conversion function would win over a constructor template and would call itself
+recursively); see commit <a href="https://github.com/llvm/llvm-project/commit/5173136a968547330ab5a25c467b9b968be9ab43"><code>5173136</code></a>. Even still, if the constructor
 template takes its argument by const reference and the conversion function is
-not const-qualified, the conversion function will win like in Example 4. So,
-again, the fact that Clang wasn't forced to change this behavior is a relevant
-data point.</p>
+not const-qualified, the conversion function will win like in Example 4.</p>
+
+<p>At the March 3, 2023 CWG telecon, some implementers expressed concerns over
+changing the behavior of Example 4, citing domains in which having both a
+constructor and a conversion function like in Example 4 are actually common. The
+consensus was that the behavior of Example 4 should not be changed, which rules
+out the current Clang and GCC approaches.</p>
 
 <p>A related implementation divergence between Clang/GCC and MSVC that was
 reported on Stack Overflow involves a binding of a base class reference to a
@@ -301,7 +318,10 @@ struct Y : A, B { };
 X x(Y{});  // well-formed in current C++, ambiguous in Clang</code></pre>
 <p>My sense is that the amount of real code that would exhibit this kind of
 breakage is low, although there are approaches we could take to avoid them if
-CWG considers it important to do so.</p>
+CWG considers it important to do so.
+It was also pointed out on the reflector that users who would encounter such an
+ambiguity as a result of adopting the Clang approach would have an easy fix:
+add the constructor <code>X::X(Y&amp;&amp;)</code>.</p>
 
 <p>I don't think GCC's algorithm ever introduces new ambiguities. In cases like
 the above where it is ambiguous which conversion function would be used in order
@@ -347,28 +367,32 @@ struct Source {
 
 NonCopyable&lt;0&gt; nc(Source{});  // OK in Clang; ill-formed in GCC, MSVC, and the current standard</code></pre>
 
+<p>In the March 3, 2023 telecon, CWG appeared to be divided as to how this
+example should behave. It was pointed out that in current C++, this
+initialization is well-formed as a copy-initialization, and some members
+expressed dissatisfaction that it does not also work as a direct-initialization.
+Others pointed out that the direct-initialization syntax looks as if it connotes
+a constructor call, and while we all agree that we intend to elide that call
+under some circumstances (see Example 1), perhaps we should not actually be
+trying to support Example 8.</p>
+
 <h2>Proposed resolution</h2>
-<p>For the reasons explained above, I propose to proceed with a Clang/GCC style
-approach. This resolution should also cover the (very similar) case where an
+<p>After the CWG telecon on March 3, 2023, and in particular the consensus to
+continue calling the constructor in Example 4, a number of different feasible
+approaches still remain. One is to simply adopt the MSVC approach, which is
+guaranteed to have no effect on overload resolution. A second is the MSVC
+approach plus a small fix for Example 8, namely: only if there is no viable
+constructor for the direct-initialization, consider conversion functions. A
+third approach, which preserves the behavior of Examples 4 and 5 while retaining
+the Clang/GCC changes for Examples 2 and 3 and the Clang changes for Example 8,
+is to
+place
+constructors and conversion functions into separate <q>brackets</q> for the
+overload resolution tournament; in the championship match, a constructor using a
+standard conversion sequence beats any conversion function.</p>
+
+<p>I lean toward the third
+approach. In any case, the resolution should also cover the (very similar) case where an
 object of class type is list-initialized from an initializer list with a single
 element of class type.</p>
 
-<p>However, I think that before I proceed with the drafting of the resolution,
-we need EWG to decide what behavior we want on Example 4: should it call the
-constructor as it does in current C++, call the conversion function as
-Clang/GCC do, or maybe even be made ambiguous? EWG might also wish to take a
-look at Example 5.</p>
-
-<p>If the decision is to bless the Clang/GCC behavior, then between Clang and
-GCC, I slightly lean toward the GCC approach because it's easier to specify and
-avoids introducing new ambiguities (see Example&nbsp;7). However, if
-Example&nbsp;8 or Example&nbsp;6 is important to support, then we should proceed
-with the Clang approach, possibly with additional provisions to make
-Example&nbsp;7 work (<i>e.g.</i> if the overload resolution is ambiguous, we
-could redo it with only the constructors as candidates).</p>
-
-<p>If the decision is to reaffirm the status quo for Example 4, then I believe
-it can be accommodated within either the Clang or GCC approach by placing
-constructors and conversion functions into separate <q>brackets</q> for the
-overload resolution tournament; in the championship match, a constructor with
-exact match rank beats any conversion function.</p>
