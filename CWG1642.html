@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Lvalue-to-rvalue conversions for built-in operators (Core issue 1642)</title>
+<style>
+ins {
+    color: green;
+    text-decoration: underline;
+}
+del {
+    color: red;
+    text-decoration: line-through;
+}
+ul {
+    list-style: none;
+    padding: 0 0 0 1.5em;
+}
+li {
+    padding: 0.5ex 0;
+}
+li::before {
+    content: "\2014";
+    float: left;
+    margin-left: -1.5em;
+}
+pre {
+    margin-left: 1em;
+}
+dt {
+    font-weight: bold;
+}
+</style>
+</head>
+<h1>Lvalue-to-rvalue conversions for built-in operators
+(<a href="https://wg21.link/CWG1642">Core issue 1642</a>)</h1>
+<table style="float: right">
+<!--<tr><td>Document number:</td><td>DxxxxR0</td></tr>-->
+<tr><td>Date:</td><td>March 5, 2023</td></tr>
+<!--<tr><td>Audience:</td><td>CWG</td></tr>-->
+<tr><td>Reply to:</td><td>Brian Bi (bbi5291@gmail.com)</td></tr>
+</table>
+<div style="clear: both"></div>
+
+<p>Wording is relative to <a href="https://wg21.link/N4928">N4928</a>.</p>
+
+<p><em>Drafting note:</em> [basic.lval]/6 specifies that</p>
+<blockquote>Whenever a glvalue appears as an operand of an operator that expects
+a prvalue for that operand, the lvalue-to-rvalue (7.3.2), array-to-pointer, or
+function-to-pointer (7.3.4) standard conversions are applied to convert the
+expression to a prvalue. [Note 5: ...] [Note 6: ...] [Note 7: ...]</blockquote>
+<p><em>Consequently, it generally suffices to insert missing language specifying
+when operands shall be prvalues. There are also a number of operators for which
+this has already been done. In addition, there are no changes required for
+expressions that are required to be constant expressions of some integral type,
+because the lvalue-to-rvalue conversion is implicit in the concept of a
+<q>converted constant expression</q>.</em></p>
+
+<p>Add a note to [conv.general]/1:</p>
+<blockquote><p>[...]</p>
+<p>[<em>Note 1:</em> A standard conversion sequence can be empty, i.e., it can
+consist of no conversions. &mdash;<em>end note</em>]</p>
+<p>A standard conversion sequence will be applied to an expression if necessary
+to convert it to a required destination type.</p>
+<p>[<em>Note 2:</em> [...]]</p>
+<p><ins>[<em>Note 3:</em> When the required destination type is an object type
+and the source expression is a glvalue of the same type, the lvalue-to-rvalue
+conversion is necessary to convert the expression to the destination type, even
+though the expression already has the required type.
+&mdash;<em>end note</em>]</ins></p></blockquote>
+
+<p>Insert a bullet at the beginning of [expr.arith.conv]/1:</p>
+<blockquote><ul><li><ins>The lvalue-to-rvalue conversion ([conv.lval]) is
+applied to each operand and the resulting prvalues are used in place of the
+original operands for the remainder of this
+section.</li></ul></ins></blockquote>
+
+<p>[expr.sub] requires no changes; it already states the value category required
+of each operand.</p>
+
+<p>Edit [expr.call]/1:</p>
+<blockquote>[...] For a call to a non-member function or to a static member
+function, the postfix expression shall <ins>be </ins>either <del>be </del>an
+lvalue that refers to a function (in which case the function-to-pointer standard
+conversion (7.3.4) is suppressed on the postfix expression), or
+<del>have</del><ins>a prvalue of</ins> function pointer type.</blockquote>
+
+<p>[expr.ref] requires no changes; the requirement for the first operand of the
+arrow operator to be a prvalue is implicit in the transformed version
+<code>(*(E1)).E2</code>.</p>
+
+<p>[expr.dynamic.cast], [expr.static.cast], [expr.reinterpret.cast], and
+[expr.const.cast] require no changes; they explicitly state when
+lvalue-to-rvalue, array-to-pointer, and function-to-pointer conversions are
+performed.</p>
+
+<p>[expr.unary.op]/1 requires no changes; it states that the operand of the
+<code>*</code> operator shall be a prvalue.</p>
+
+<p>Edit [expr.unary.op]/7:</p>
+<blockquote>The operand of the unary <code>+</code> operator shall
+<del>have</del><ins>be a prvalue of</ins> arithmetic, unscoped enumeration, or
+pointer type and the result is the value of the argument. Integral promotion is
+performed on integral or enumeration operands. [...]</blockquote>
+
+<p>Edit [expr.unary.op]/8:</p>
+<blockquote>The operand of the unary <code>-</code> operator shall
+<del>have</del><ins>be a prvalue of</ins> arithmetic or unscoped enumeration
+type and the result is the negative of its operand. Integral promotion is performed on integral or enumeration operands. [...]</blockquote>
+
+<p>[expr.unary.op]/9 requires no changes; the contextual conversion to
+<code>bool</code> implicitly entails any required standard conversions.</p>
+
+<p>Edit [expr.unary.op]/10:</p>
+<blockquote>The operand of the <code>~</code> operator shall
+<del>have</del><ins>be a prvalue of</ins> integral or unscoped enumeration type.
+Integral promotions are performed. [...]</blockquote>
+
+<p>[expr.new] requires no changes. Dynamic array bounds are <q>implicitly
+converted to <code>std::size_t</code></q>.</p>
+
+<p>Edit [expr.delete]/1:</p>
+<blockquote>[...] <del>The operand shall be of pointer to object type or of
+class type. </del>If <ins>the operand is </ins>of class type, <del>the
+operand</del><ins>it</ins> is contextually implicitly converted (7.3) to a
+pointer to object type.<sup>67</sup> <ins>Otherwise, it shall be a prvalue of
+pointer to object type. </ins>The <i>delete-expression</i> has type
+<code>void</code>.</blockquote>
+
+<p>Edit [expr.mptr.oper]/2:</p>
+<blockquote>The binary operator <code>.*</code> binds its second operand, which
+shall be <ins>a prvalue </ins>of type <q>pointer to member of
+<code>T</code></q> to its first operand, which shall be a glvalue of class
+<code>T</code> or of a class of which <code>T</code> is an unambiguous and
+accessible base class. [...]</blockquote>
+
+<p>Edit [expr.mptr.oper]/3:</p>
+<blockquote>The binary operator <code>-&gt;*</code> binds its second operand,
+which shall be <ins>a prvalue </ins>of type <q>pointer to member of
+<code>T</code></q> to its first operand, which shall be of type <q>pointer to
+<code>U</code></q> where <code>U</code> is either <code>T</code> or a class of
+which <code>T</code> is an unambiguous and accessible base class. The expression
+<code>E1-&gt;*E2</code> is converted into the equivalent form
+<code>(*(E1)).*E2</code>.</blockquote>
+<p><em>Drafting note: we do not need to say that the first operand shall be a
+prvalue here, because it is implied by the use of the unary <code>*</code>
+operator in the transformed version.</em></p>
+
+<p>[expr.mul] requires no changes after the changes to [expr.arith.conv].</p>
+
+<p>Edit [expr.add]/1:</p>
+<blockquote><p>The additive operators <code>+</code> and <code>-</code> group
+left-to-right. <ins>Each operand shall be a prvalue. If both operands have
+arithmetic or enumeration type, </ins><del>T</del><ins>t</ins>he usual
+arithmetic conversions (7.4) are performed <del>for operands of arithmetic or
+enumeration type</del><ins>and the converted operands are used in place of the
+original operands for the remainder of this section.</ins></p>
+<p><i>additive-expression:</i><br/>[...]</p>
+<p>For addition, either both operands shall have arithmetic <del>or unscoped
+enumeration </del>type, or one operand shall be a pointer to a
+completely-defined object type and the other shall have integral or unscoped
+enumeration type.</p></blockquote>
+<p><em>Drafting note: we could also specify that if only one operand has
+arithmetic or unscoped enumeration type, it undergoes integral promotion. This
+would allow us to omit <q>or unscoped enumeration type</q> in those cases as
+well.</em></p>
+
+<p>Edit [expr.add]/2:</p>
+<blockquote>For subtraction, one of the following shall hold:
+<ul>
+<li>both operands have arithmetic <del>or unscoped enumeration </del>type;
+or</li>
+<li>both operands are pointers to cv-qualified or cv-unqualified versions of the
+same completely-defined object type; or</li>
+<li>the left operand is a pointer to a completely-defined object type and the
+right operand has integral or unscoped enumeration type.</li>
+</ul></blockquote>
+
+<p>Edit [expr.shift]/1:</p>
+<blockquote>[...] The operands shall be <ins>prvalues </ins>of integral or
+unscoped enumeration type and integral promotions are performed.
+[...]</blockquote>
+<p><em>Drafting note: we could also choose to specify that performing integral
+promotion implicitly performs an lvalue-to-rvalue conversion (even on types that
+do not promote), in which case [expr.shift] would require no changes.</em></p>
+
+<p>[expr.spaceship] requires no changes. p4 specifies that the usual arithmetic
+conversions are performed. For p5 (concerning two operands of the same
+enumeration type) the lvalue-to-rvalue conversion is implicit in the specified
+conversion to the underlying type. In p6, the array-to-pointer conversion is
+explicitly indicated.</p>
+
+<p>[expr.rel] and [expr.eq] require no changes; they explicitly indicate the
+lvalue-to-rvalue, array-to-pointer, and function-to-pointer conversions.</p>
+
+<p>The bitwise binary operators require no changes, since they perform the usual
+arithmetic conversions.</p>
+
+<p>The logical binary operators require no changes, since they perform
+contextual conversion to <code>bool</code>.</p>
+
+<p>[expr.ass] requires no changes since it indicates an implicit conversion from
+the right operand to the left operand's type.</p>
