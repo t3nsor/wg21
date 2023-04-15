@@ -43,13 +43,22 @@ dt {
 <h1>Copy elision for direct-initialization with a conversion function
 (<a href="https://wg21.link/CWG2327">Core issue 2327</a>)</h1>
 <table style="float: right">
-<tr><td>Document number:</td><td>P2828R0</td></tr>
-<tr><td>Date:</td><td>March 13, 2023</td></tr>
+<tr><td>Document number:</td><td>D2828R1</td></tr>
+<tr><td>Date:</td><td>April 15, 2023</td></tr>
 <tr><td>Audience:</td><td>CWG</td></tr>
 <tr><td>Reply to:</td><td>Brian Bi (bbi5291@gmail.com)</td></tr>
 <tr><td>With thanks to:</td><td>Richard Smith</td></tr>
 </table>
 <div style="clear: both"></div>
+<h2>Revision history</h2>
+<dl>
+<dt>R1</dt>
+<dd>
+<ul>
+<li>Added proposed wording</li>
+</ul>
+</dd>
+</dl>
 <h2>Copy elision in the Big 4</h2>
 <p>Consider the example given in the issue report:</p>
 <pre class="example"><code>struct Cat {};
@@ -418,7 +427,7 @@ bug in MSVC. (This bug may be unrelated to copy elision, since it appears that
 older versions of MSVC, which do not perform copy elision in Example 9, also
 exhibit the nonconforming behavior of choosing the copy constructor.)</p>
 
-<h2>Proposed resolution</h2>
+<h2>Description of proposed resolution</h2>
 <p>After the CWG telecon on March 3, 2023, and in particular the consensus to
 continue calling the constructor in Example 4, a number of different feasible
 approaches still remain. One is to simply adopt the EDG approach, which is
@@ -448,5 +457,172 @@ overload resolution to require elision in more cases.</p>
 
 <p>In any case, the resolution should also cover the (very similar) case where an
 object of class type is list-initialized from an initializer list with a single
-element of class type.</p>
+element of class type.
+Since I propose the conservative approach here for parenthesized initialization,
+I also propose the same approach for list-initialization.</p>
 
+<h2>Wording</h2>
+<p>Wording is relative to <a href="https://wg21.link/N4944">N4944</a>.</p>
+
+<p>Edit [basic.def.odr]/4:</p>
+<blockquote>A function is <em>named by</em> an expression or conversion as
+follows:
+<ul>
+<li>A function <ins><code>F</code> </ins>is named by an expression or conversion
+if <del>it</del><ins><code>F</code></ins> is the selected member of an overload
+set ([basic.lookup], [over.match], [over.over]) in an overload resolution
+performed as part of forming that expression or conversion, unless<del>it is a
+pure virtual function and either the expression is not an <i>id-expression</i>
+naming the function with an explicitly qualified name or the expression forms a
+pointer to member ([expr.unary.op]).</del>
+<ul>
+<li><ins><code>F</code> is a pure virtual function and either the expression is
+not an <i>id-expression</i> naming <code>F</code> with an explicitly qualified
+name or the expression forms a pointer to member ([expr.unary.op]),
+or</ins></li>
+<li><ins>the context is the initialization of an object of class type, where
+<code>F</code> is the constructor that was selected by overload resolution, and
+the object is initialized by calling a conversion function instead of calling
+<code>F</code> ([dcl.init.general], [dcl.init.list]).</ins></li>
+</ul>
+[<em>Note 2</em>: This covers taking the address of functions ([conv.func],
+[expr.unary.op]), calls to named functions ([expr.call]), operator overloading
+([over]), user-defined conversions ([class.conv.fct]), allocation functions for
+<i>new-expressions</i> ([expr.new]), as well as non-default initialization
+([dcl.init]). A constructor selected to copy or move an object of class type is
+considered to be named by an expression or conversion even if the call is
+actually elided by the implementation ([class.copy.elision]). &mdash;<em>end
+note</em>]</li>
+<li>[...]</li>
+</ul></blockquote>
+
+<p><em>Drafting note</em>: I avoid using the term <q>elided</q> to describe the
+form of elision that is the subject of this proposal, in order to avoid having
+to distinguish between it and elision under [class.copy.elision].</p>
+
+<p>Edit [dcl.init.general]/16.6.2:</p>
+<blockquote>Otherwise, if the initialization is direct-initialization, or if it
+is copy-initialization where the cv-unqualified version of the source type is
+the same class as, or a derived class of, the class of the destination,
+constructors are considered. The applicable constructors are enumerated
+([over.match.ctor]), and the best one is chosen through overload resolution
+([over.match]). Then:
+<ul>
+<li>If overload resolution is successful<ins>:</ins><del>, the selected
+constructor is called to initialize the object, with the initializer expression
+or <i>expression-list</i> as its argument(s).</del>
+<ul>
+<li><ins>If the selected constructor is a copy or move constructor
+([class.copy.ctor]) for the class of the destination and the implicit conversion
+sequence ([over.best.ics.general]) for the constructor's first parameter would
+bind that parameter to the result object of a conversion function whose return
+type, ignoring cv-qualification, is the class of the destination, that
+conversion function is called to initialize the object. The selection of the
+constructor by the overload resolution performed under this paragraph does not
+cause it to be named ([basic.def.odr]) or referred to ([dcl.fct.def.delete]) by
+the initialization.
+<br/>
+[<em>Note -?-</em>: Therefore, the selection of the constructor to initialize
+the destination object does not odr-use the constructor, nor require it to be
+accessible ([class.access]) in the context of the initialization. &mdash;<em>end
+note</em>]<br/>
+[<em>Example -?-</em>:
+<pre><code>struct Cat {
+    Cat() = default;
+  private:
+    Cat(const Cat&amp;) = delete;
+    Cat(Cat&amp;&amp;) = delete;
+};
+
+struct Dog { operator Cat(); };
+
+Dog d;
+Cat c(d);  // OK; calls Dog::operator Cat</code></pre>
+&mdash;<em>end example</em>]<br/>
+[<em>Note -?-</em>: This cannot occur in the context of
+copy-non-list-initialization, because user-defined conversions are not
+considered for the first parameter ([over.best.ics.general]).
+&mdash;<em>end note</em>]</ins></li>
+<li><ins>Otherwise, the selected constructor is called to initialize the object,
+with the initializer expression or <i>expression-list</i> as its
+argument(s).</ins></li>
+</ul>
+</li>
+<li>Otherwise, if no constructor is viable, the destination type is an aggregate
+class, and the initializer is a parenthesized <i>expression-list</i>, the object
+is initialized as follows. [...]</li>
+<li>Otherwise, the initialization is ill-formed.</li>
+</ul>
+</blockquote>
+
+<p>Edit [dcl.init.list]/3.7:</p>
+<blockquote>Otherwise, if <code>T</code> is a class type, constructors are
+considered. The applicable constructors are enumerated and the best one is
+chosen through overload resolution ([over.match], [over.match.list]). If a
+narrowing conversion (see below) is required to convert any of the arguments,
+the program is ill-formed.<ins> Then:</ins>
+<ul>
+<li><ins>If the selected constructor is a copy or move constructor
+([class.copy.ctor]) for <code>T</code> and the implicit conversion sequence
+([over.best.ics.general]) for the constructor's first parameter would bind that
+parameter to the result object of a conversion function whose return type is
+<code>T</code> (ignoring cv-qualification), that conversion function is called
+to initialize the object. The selection of the constructor by the overload
+resolution performed under this paragraph does not cause it to be named
+([basic.def.odr]) or referred to ([dcl.fct.def.delete]) by the initialization.
+<br/>
+[<em>Note -?-</em>: Therefore, the selection of the constructor to initialize
+the destination object does not odr-use the constructor, nor require it to be
+accessible ([class.access]) in the context of the initialization. &mdash;<em>end
+note</em>]<br/>
+[<em>Example -?-</em>:
+<pre><code>struct Cat {
+    Cat() = default;
+  private:
+    Cat(const Cat&amp;) = delete;
+    Cat(Cat&amp;&amp;) = delete;
+};
+
+struct Dog { operator Cat(); };
+
+Dog d;
+Cat c = {d};  // OK; calls Dog::operator Cat
+Cat c(d);     // ditto</code></pre>
+&mdash;<em>end example</em>]</ins></li>
+<li><ins>Otherwise, the selected constructor is called to initialize the object,
+with the argument(s) specified by [over.match.list].</ins></li>
+<ul>
+</blockquote>
+
+<p><em>Drafting note:</em> A function is <em>needed for constant evaluation</em>
+under [expr.const]/20.6 only if it is actually named by an expression (that is
+potentially constant-evaluated), so the exemption from being named by the
+wording above will also provide an exemption from being needed for constant
+evaluation (implying that a copy or move constructor that is defaulted on its
+first declaration will not be implicitly defined when it is elided as
+specified above).</p>
+
+<p>Add a note to [over.ics.list]/7.2:</p>
+<blockquote>Otherwise, if the parameter is a non-aggregate class <code>X</code>
+and overload resolution per [over.match.list] chooses a single best constructor
+<code>C</code> of <code>X</code> to perform the initialization of an object of
+type <code>X</code> from the argument initializer list:
+<ul>
+<li>If <code>C</code> is not an initializer-list constructor and the
+initializer list has a single element of type <i>cv</i>&nbsp;<code>U</code>,
+where <code>U</code> is <code>X</code> or a class derived from <code>X</code>,
+the implicit conversion sequence has Exact Match rank if <code>U</code> is
+<code>X</code>, or Conversion rank if <code>U</code> is derived from
+<code>X</code>.</li>
+<li>Otherwise, the implicit conversion sequence is a user-defined conversion
+sequence whose second standard conversion sequence is an identity
+conversion.<br/>
+<ins>[<em>Note -?-</em>: Even if <code>C</code> would not actually be called to
+initialize the parameter because a conversion function would be called instead
+as specified in [dcl.init.list], <code>C</code> is still considered to be chosen
+for the purposes of this paragraph. &mdash;<em>end note</em>]</ins></li>
+</ul></blockquote>
+
+<p><em>Drafting note:</em> If the wording of [over.ics.list]/7.2 is clarified as
+suggested in <a href="https://lists.isocpp.org/core/2023/04/14183.php">reflector
+message 14183</a>, the note is still applicable.</em></p>
