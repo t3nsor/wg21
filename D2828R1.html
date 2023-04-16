@@ -44,7 +44,7 @@ dt {
 (<a href="https://wg21.link/CWG2327">Core issue 2327</a>)</h1>
 <table style="float: right">
 <tr><td>Document number:</td><td>D2828R1</td></tr>
-<tr><td>Date:</td><td>April 15, 2023</td></tr>
+<tr><td>Date:</td><td>April 16, 2023</td></tr>
 <tr><td>Audience:</td><td>CWG</td></tr>
 <tr><td>Reply to:</td><td>Brian Bi (bbi5291@gmail.com)</td></tr>
 <tr><td>With thanks to:</td><td>Richard Smith</td></tr>
@@ -513,7 +513,7 @@ constructor is called to initialize the object, with the initializer expression
 or <i>expression-list</i> as its argument(s).</del>
 <ul>
 <li><ins>If the selected constructor is a copy or move constructor
-([class.copy.ctor]) for the class of the destination and the implicit conversion
+([class.copy.ctor]) for the class of the destination, the initializer is a parenthesized <i>expression-list</i> containing a single element, and the implicit conversion
 sequence ([over.best.ics.general]) for the constructor's first parameter would
 bind that parameter to the result object of a conversion function whose return
 type, ignoring cv-qualification, is the class of the destination, that
@@ -563,7 +563,7 @@ narrowing conversion (see below) is required to convert any of the arguments,
 the program is ill-formed.<ins> Then:</ins>
 <ul>
 <li><ins>If the selected constructor is a copy or move constructor
-([class.copy.ctor]) for <code>T</code> and the implicit conversion sequence
+([class.copy.ctor]) for <code>T</code>, the <i>braced-init-list</i> contains a single element, and the implicit conversion sequence
 ([over.best.ics.general]) for the constructor's first parameter would bind that
 parameter to the result object of a conversion function whose return type is
 <code>T</code> (ignoring cv-qualification), that conversion function is called
