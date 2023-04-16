@@ -56,6 +56,7 @@ dt {
 <dd>
 <ul>
 <li>Added proposed wording</li>
+<li>Added Example 10</li>
 </ul>
 </dd>
 </dl>
@@ -427,6 +428,41 @@ bug in MSVC. (This bug may be unrelated to copy elision, since it appears that
 older versions of MSVC, which do not perform copy elision in Example 9, also
 exhibit the nonconforming behavior of choosing the copy constructor.)</p>
 
+<h3>Which constructors may be elided?</h3>
+<p>The following example involves a constructor that can be selected to create
+an object from an rvalue of the same type, but is not a move constructor because
+a function template is never a move constructor:</p>
+<pre class="example"><code>#include &lt;type_traits&gt;
+
+template &lt;bool has_copy_constructor&gt;
+struct Cat {
+    Cat();
+    Cat(const Cat&amp;) requires has_copy_constructor;
+    Cat(Cat&amp;&amp;) requires has_copy_constructor;
+
+    template &lt;class C = Cat&gt;
+    Cat(std::type_identity_t&lt;C&gt;&amp;&amp;) = delete;
+};
+
+struct Dog {
+    operator Cat&lt;false&gt;();
+};
+
+Dog d;
+Cat&lt;false&gt; c(d);  // OK in Clang and NVC++; ill-formed in GCC, MSVC, and the current standard</code></pre>
+
+<p>Here, GCC does not elide the constructor call because the constructor is
+neither a copy nor move constructor. MSVC does not elide it either. Clang does
+elide, because <code>Dog::operator Cat&lt;false&gt;</code> is a candidate during
+overload resolution. Perhaps surprisingly, NVC++ is more liberal than MSVC; it
+<em>does</em> elide the constructor call.</p>
+
+<p>There doesn't seem to be an obvious argument for whether only copy and move
+constructors should be elidable, or any constructor whose parameter-type-list
+would make it a copy or move constructor if it were not a template. However, the
+former is slightly easier to specify, and the code snippet above is unlikely to
+resemble real code.</p>
+
 <h2>Description of proposed resolution</h2>
 <p>After the CWG telecon on March 3, 2023, and in particular the consensus to
 continue calling the constructor in Example 4, a number of different feasible
@@ -450,7 +486,7 @@ considering the unexpected consequences for Example 4, there does not appear to
 be consensus on how to change the overload resolution rules to take conversion
 functions into account during direct-initialization. It therefore seems to me
 that we should simply adopt the most conservative (EDG) approach for resolving
-issue 2327, and defer any decision on changing the overload resolution rules to
+issue 2327 (with a small tweak, namely that only copy and move constructors may be elided; see Example 10 above), and defer any decision on changing the overload resolution rules to
 a future point in time (and perhaps a different room, <i>i.e.</i>, EWG). Taking
 the conservative approach here will not close the door to future changes in
 overload resolution to require elision in more cases.</p>
@@ -625,4 +661,8 @@ for the purposes of this paragraph. &mdash;<em>end note</em>]</ins></li>
 
 <p><em>Drafting note:</em> If the wording of [over.ics.list]/7.2 is clarified as
 suggested in <a href="https://lists.isocpp.org/core/2023/04/14183.php">reflector
-message 14183</a>, the note is still applicable.</em></p>
+message 14183</a>, the note is still applicable.
+Also, it's not clear to me that it ever makes a difference whether we consider
+the user-defined conversion in the user-defined conversion sequence to be
+<code>C</code> or the conversion function, so I've added this note just to be
+safe.</em></p>
