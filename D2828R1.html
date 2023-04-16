@@ -625,7 +625,7 @@ struct Dog { operator Cat(); };
 
 Dog d;
 Cat c = {d};  // OK; calls Dog::operator Cat
-Cat c(d);     // ditto</code></pre>
+Cat c{d};     // ditto</code></pre>
 &mdash;<em>end example</em>]</ins></li>
 <li><ins>Otherwise, the selected constructor is called to initialize the object,
 with the argument(s) specified by [over.match.list].</ins></li>
