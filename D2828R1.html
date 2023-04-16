@@ -24,15 +24,17 @@ li::before {
     float: left;
     margin-left: -1.5em;
 }
-pre.example::before {
+code.example::before {
     color: #888;
     display: block;
     font-style: italic;
     counter-increment: example;
     content: "// Example " counter(example);
 }
-pre {
+code.example {
     margin-left: 1em;
+    white-space: pre;
+    display: block;
 }
 dt {
     font-weight: bold;
@@ -62,11 +64,11 @@ dt {
 </dl>
 <h2>Copy elision in the Big 4</h2>
 <p>Consider the example given in the issue report:</p>
-<pre class="example"><code>struct Cat {};
+<code class="example">struct Cat {};
 struct Dog { operator Cat(); };
 
 Dog d;
-Cat c(d);</code></pre>
+Cat c(d);</code>
 <p>Recent versions of Clang, GCC, MSVC, and NVC++ (which uses an EDG front end) all implement copy elision, and
 accept the code even if <code>Cat</code>'s move constructor is explicitly
 deleted. However, each implementation has taken a different approach in order to
@@ -144,7 +146,7 @@ approaches.</p>
 operators are present</h3>
 <p>This is the most common type of implementation divergence noticed by Stack
 Overflow users. Its most common incarnation boils down to:</p>
-<pre class="example"><code>struct X {
+<code class="example">struct X {
    X(int);
    // X(X&amp;&amp;);  // implicitly declared
 };
@@ -154,7 +156,7 @@ struct Y {
    operator int();
 };
 
-X x(Y{});</code></pre>
+X x(Y{});</code>
 <p>The status quo is that this is ambiguous because the candidates
 <code>X::X(int)</code> and <code>X::X(X&amp;&amp;)</code> each require a
 different user-defined conversion function (<code>Y::operator&nbsp;int</code>
@@ -175,7 +177,7 @@ well-formed) behavior.</p>
 
 <p>This divergence also arises in the context of standard library classes that
 have multiple one-argument constructors:</p>
-<pre class="example"><code>#include &lt;string&gt;
+<code class="example">#include &lt;string&gt;
 
 struct X {
    template &lt;typename T&gt;
@@ -187,7 +189,7 @@ std::string s(X{});
   // string(const char*)?
   // string(const allocator&amp;)?
   // string(initializer_list&lt;char&gt;)?
-  // string(nullptr_t)?</code></pre>
+  // string(nullptr_t)?</code>
 <p>Here, virtually anyone but a language lawyer would expect the conversion
 operator to be called to convert to <code>std::string</code>.
 However, having an unconstrained conversion function template as in this
@@ -204,7 +206,7 @@ Clang/GCC approach <em>changes</em> the behavior in possibly surprising ways: a
 conversion function that is suitable for elision will be preferred over most
 constructors even if the implicit conversion sequence for the constructor is a
 standard conversion sequence. For example:</p>
-<pre class="example"><code>struct Dog;
+<code class="example">struct Dog;
 
 struct Cat {
     Cat(const Dog&amp;);
@@ -214,7 +216,7 @@ struct Dog {
     operator Cat();
 };
 
-Cat cat(Dog{});</code></pre>
+Cat cat(Dog{});</code>
 <p>In current C++ and in EDG and MSVC, this will call the converting constructor. In
 Clang/GCC, this will call <code>operator&nbsp;Cat</code> because when
 <code>operator&nbsp;Cat</code> is a candidate, its implicit conversion sequence
@@ -264,7 +266,7 @@ out the current Clang and GCC approaches.</p>
 <p>A related implementation divergence between Clang/GCC and EDG/MSVC that was
 reported on Stack Overflow involves a binding of a base class reference to a
 derived class object, and can be illustrated as follows:</p>
-<pre class="example"><code>struct A1 {};
+<code class="example">struct A1 {};
 
 struct A2 {
     A2(const A1&amp;);  // EDG and MSVC call this (conform to current standard)
@@ -275,12 +277,12 @@ struct B : A1 {
     operator A2();  // Clang and GCC call this
 };
 
-A2 a(B{});</code></pre>
+A2 a(B{});</code>
 
 <h3>Conversion functions to both <code>A</code> and <q>reference to
 <code>A</code></q></h3>
 <p>Consider the following:</p>
-<pre class="example"><code>struct T {
+<code class="example">struct T {
     T(T const&amp;);
 };
 
@@ -290,7 +292,7 @@ struct S {
 };
 
 S s;
-T t(s);</code></pre>
+T t(s);</code>
 <p>The status quo is this will call <code>S::operator&nbsp;T&amp;</code> because
 the implicit conversion from <code>S</code> to <code>T&nbsp;const&amp;</code>
 prefers to bind the reference to an lvalue rather than materializing a
@@ -315,7 +317,7 @@ ambiguities</h3>
 introduced an ambiguity that is not present in the current standard. However, it
 is possible to construct one by having multiple conversion functions that take
 precedence over all constructors but are ambiguous among themselves:</p>
-<pre class="example"><code>struct Y;
+<code class="example">struct Y;
 
 struct X {
     X(const Y&amp;);
@@ -331,7 +333,7 @@ struct B {
 
 struct Y : A, B { };
 
-X x(Y{});  // well-formed in current C++, ambiguous in Clang</code></pre>
+X x(Y{});  // well-formed in current C++, ambiguous in Clang</code>
 <p>My sense is that the amount of real code that would exhibit this kind of
 breakage is low, although there are approaches we could take to avoid them if
 CWG considers it important to do so.
@@ -367,7 +369,7 @@ conversion function only gets considered if it chosen by a constructor. This
 difference is not just philosophical; in addition to the divergences already
 discussed, we can observe that the Clang approach permits copy elision even in
 cases where no copy constructor, not even a deleted one, has its constraints satisfied:</p>
-<pre class="example"><code>template &lt;int i = 0&gt;
+<code class="example">template &lt;int i = 0&gt;
 class NonCopyable {
   public:
     NonCopyable(const NonCopyable&amp;) requires(i != 0);
@@ -381,7 +383,7 @@ struct Source {
     operator NonCopyable&lt;0&gt;();
 };
 
-NonCopyable&lt;0&gt; nc(Source{});  // OK in Clang; ill-formed in GCC, MSVC, and the current standard</code></pre>
+NonCopyable&lt;0&gt; nc(Source{});  // OK in Clang; ill-formed in GCC, MSVC, and the current standard</code>
 
 <p>In the March 3, 2023 telecon, CWG appeared to be divided as to how this
 example should behave. It was pointed out that in current C++, this
@@ -402,7 +404,7 @@ standardizing such behavior.</p>
 <h3>Mysterious divergence between EDG and MSVC</h3>
 <p>The following is very similar to Example 2, but shows that EDG and MSVC do
 not take the exact same approach:</p>
-<pre class="example"><code>struct Cat {
+<code class="example">struct Cat {
     Cat(const Cat&amp;);
     Cat(int);
 };
@@ -412,7 +414,7 @@ struct Dog {
     operator int();
 };
 
-Cat cat(Dog{});  // ambiguous in current C++</code></pre>
+Cat cat(Dog{});  // ambiguous in current C++</code>
 <p>Example 2 has both an implicitly declared copy constructor and an implicitly
 declared move constructor, while Example 9 has a user-declared copy constructor
 and, therefore, no move constructor. As in Example 2, Clang and GCC will call
@@ -432,7 +434,7 @@ exhibit the nonconforming behavior of choosing the copy constructor.)</p>
 <p>The following example involves a constructor that can be selected to create
 an object from an rvalue of the same type, but is not a move constructor because
 a function template is never a move constructor:</p>
-<pre class="example"><code>#include &lt;type_traits&gt;
+<code class="example">#include &lt;type_traits&gt;
 
 template &lt;bool has_copy_constructor&gt;
 struct Cat {
@@ -449,7 +451,7 @@ struct Dog {
 };
 
 Dog d;
-Cat&lt;false&gt; c(d);  // OK in Clang and NVC++; ill-formed in GCC, MSVC, and the current standard</code></pre>
+Cat&lt;false&gt; c(d);  // OK in Clang and NVC++; ill-formed in GCC, MSVC, and the current standard</code>
 
 <p>Here, GCC does not elide the constructor call because the constructor is
 neither a copy nor move constructor. MSVC does not elide it either. Clang does
