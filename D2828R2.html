@@ -77,6 +77,9 @@ kept it as <q>argument(s)</q> in [dcl.init.general]/16.6.2).</li>
 including a drive-by fix.</li>
 <li>Updated the last drafting note to refer to CWG2731, which was created from
 the reflector message that was previously referred to.</li>
+<li>Simplified the wording of [dcl.fct.def.delete]/2.</li>
+<li>Clarified <q>This</q> in the <q>This cannot occur in the context of
+copy-non-list-initialization</q> note.</li>
 </ul>
 </dd>
 <dt>R1</dt>
@@ -598,7 +601,7 @@ struct Dog { operator Cat(); };
 Dog d;
 Cat c(d);  // OK, calls Dog::operator Cat</code></pre>
 &mdash;<em>end example</em>]<br/>
-[<em>Note -?-</em>: This cannot occur in the context of
+[<em>Note -?-</em>: Conversion-initialization cannot occur in the context of
 copy-non-list-initialization, because user-defined conversions are not
 considered for the first parameter ([over.best.ics.general]).
 &mdash;<em>end note</em>]</ins></li>
@@ -654,8 +657,8 @@ specified above).</p>
 
 <p>Edit [dcl.fct.def.delete]/2:</p>
 <blockquote>A program that refers to a deleted function implicitly or
-explicitly, other than to declare it<ins> or when it is the selected constructor
-when initializing an object that will be conversion-initialized
+explicitly, other than to declare it<ins> or as the constructor selected for
+the purposes of conversion-initialization
 ([dcl.init.general], [dcl.init.list])<ins>, is ill-formed.</blockquote>
 
 <p>Add a note to [over.match.general]/3:</p>
